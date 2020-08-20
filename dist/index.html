@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title>Skayak</title>
+  <meta name="description" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="shortcut icon" href="./orbit_logo_32x32.png"></head>
+<body>
+  <!--[if lt IE 8]>
+    <p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.</p>
+  <![endif]-->
+  <div id="root"></div>
+
+    <h1 id="channel">Orbit Chat</h1>
+    <div id="peersCount"></div>
+    <br/>
+    <div id="messages">Loading...</div>
+    <br/>
+    <b><label id="username" for="message"></label></b>
+    <input id="user" type="text"/>
+    <button id="connect" type="button">Reconnect</button>
+    <br/>
+    <br/>
+    <input id="message" type="text" placeholder="Type a message..."/>
+    <button id="send" type="button">Send</button>
+    <button id="send2" type="button">Send Greeting</button>
+    <button id="play" >Play me</button>
+    <button id="stop" >Stop me</button>
+    <button id="record" >Stream</button>
+    <button id="stopRecord" >Stop Stream</button>
+    <audio id="player" controls></audio>
+    <button id="playwav">View wav</button>
+    <button id="playwavstop">Stop view wav</button>
+    <button id="joinchannel">join chann</button>
+    <div id="channelList"></div>
+<script type="text/javascript" src="./vendors~main.26380cb9f8a286bb0b65.js"></script><script type="text/javascript" src="./main.26380cb9f8a286bb0b65.js"></script></body>
+</html>
