@@ -1,39 +1,186 @@
 <!doctype html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-  <title>Skayak</title>
-  <meta name="description" content="">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<link rel="shortcut icon" href="./orbit_logo_32x32.png"></head>
-<body>
-  <!--[if lt IE 8]>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Skayak</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="shortcut icon" href="./skayak.svg"></head>
+
+  <style>
+    body {
+      font-family: monospace;
+    }
+
+    .flex-container {
+      display: flex;
+      flex-direction: column;
+      background-color: grey;
+    }
+
+    .flex-container > div {
+      background-color: #f1f1f1;
+      width: calc(100% - 20px);
+      margin-top: 10px;
+      margin-left: 10px;
+
+      text-align: center;
+      line-height: 75px;
+      font-size: 30px;
+    }
+
+    .flex-container > div:last-child {
+      margin-bottom: 10px;
+      margin-left: 10px;
+    }
+
+    .skayak-container {
+      max-width: 500px;
+      min-width: 200px;
+      width: 50%;
+      align-items: center;
+      text-align: center;
+      margin: auto;
+    }
+
+    .flexy-container {
+      display: flex;
+      background-color: lightgrey;
+      flex-direction: row;
+      align-items: stretch;
+      align-content: stretch;
+    }
+
+    .flex-item {
+      display: flex;
+      background-color: cornflowerblue;
+      margin: 10pt;
+    }
+
+    .flex-item-2 {
+      display: flex;
+      flex-direction: column;
+      background-color: cornflowerblue;
+      flex: 2 0 0;
+    }
+
+    .flex-sub-container {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .flex-item-left-corner {
+      background-color: red;
+    }
+
+    .flex-item-right-corner {
+      background-color: red;
+    }
+
+    .flex-item-center {
+      align-self: center;
+      background-color: red;
+    }
+
+    .flex-item-bottom-middle {
+      align-self: center;
+      background-color: red;
+    }
+
+    .glyphicon-basic {
+      font-size: 50px;
+      top: 10px;
+      cursor: pointer;
+    }
+
+    .footer {
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      background-color: #dddddd;
+      color: white;
+      text-align: center;
+      padding-top: 50px;
+    }
+
+    #castcontrol {
+      border-radius: 5%;
+      background: gray;
+      margin-bottom: 50px;
+      padding: 10px;
+    }
+
+    #casticon {
+      font-size: 30px;
+    }
+
+    #userId {
+      display: block;
+      top: 10px;
+      font-family: 10px;
+      font-family: monospace;
+      text-align: left;
+      margin-bottom: -50px;
+      font-size: 30px;
+      color: black;
+    }
+  </style>
+
+  <body>
+    <!--[if lt IE 8]>
     <p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.</p>
   <![endif]-->
-  <div id="root"></div>
+    <div id="root"></div>
+    <section class="section">
+      <div class="container">
+        <div id="skayak-cont" class="skayak-container">
+          <h1 class="title has-text-centered">
+           Skayak
+          </h1>
+          <h3 id="castlookup">Looking out for live casts...</h3>
+          <div id="channelList" class="flex-container"></div>
 
-    <h1 id="channel">Orbit Chat</h1>
-    <div id="peersCount"></div>
-    <br/>
-    <div id="messages">Loading...</div>
-    <br/>
-    <b><label id="username" for="message"></label></b>
-    <input id="user" type="text"/>
-    <button id="connect" type="button">Reconnect</button>
-    <br/>
-    <br/>
-    <input id="message" type="text" placeholder="Type a message..."/>
-    <button id="send" type="button">Send</button>
-    <button id="send2" type="button">Send Greeting</button>
-    <button id="play" >Play me</button>
-    <button id="stop" >Stop me</button>
-    <button id="record" >Stream</button>
-    <button id="stopRecord" >Stop Stream</button>
-    <audio id="player" controls></audio>
-    <button id="playwav">View wav</button>
-    <button id="playwavstop">Stop view wav</button>
-    <button id="joinchannel">join chann</button>
-    <div id="channelList"></div>
-<script type="text/javascript" src="./vendors~main.26380cb9f8a286bb0b65.js"></script><script type="text/javascript" src="./main.26380cb9f8a286bb0b65.js"></script></body>
+        </div>
+      </div>
+    </section>
+
+    <div style="visibility:hidden">
+      <h1 id="channel">Skayak Podcast</h1>
+      <div id="peersCount"></div>
+      <br/>
+      <div id="messages">Loading...</div>
+      <br/>
+      <b>
+        <label id="username" for="message"></label>
+      </b>
+      <input id="user" type="text"/>
+      <button id="connect" type="button">Reconnect</button>
+      <br/>
+      <br/>
+      <input id="message" type="text" placeholder="Type a message..."/>
+      <button id="send" type="button">Send</button>
+      <button id="send2" type="button">Send Greeting</button>
+      <button id="play" >Play me</button>
+      <button id="stop" >Stop me</button>
+
+      <audio id="player" controls></audio>
+      <button id="playwav">View wav</button>
+      <button id="playwavstop">Stop view wav</button>
+      <button id="joinchannel">join chann</button>
+      <button style="visibility: hidden" id="stopRecord" >Stop Stream</button>
+    </div>
+
+    <div class="footer">
+      <div id="userId">User</div>
+      <button id="castcontrol" class="btn" data-attribute="cast">
+        <i id="casticon" class="fa fa-microphone"></i>
+      </button>
+    </div>
+
+  <script type="text/javascript" src="./vendors~main.cda446363ec52bcaa764.js"></script><script type="text/javascript" src="./main.cda446363ec52bcaa764.js"></script></body>
 </html>

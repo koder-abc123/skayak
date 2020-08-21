@@ -28,8 +28,9 @@ const usernameElement = document.getElementById("username");
 const userField = document.getElementById("user");
 const peersElm = document.getElementById("peersCount");
 let playDataElm = document.getElementById("play");
+
 let stopDataElm = document.getElementById("stop");
-let recordButton = document.getElementById("record");
+let recordButton = document.getElementById("castcontrol");
 let stopButton = document.getElementById("stopRecord");
 let audioElement = document.getElementById("player");
 let playWavElm = document.getElementById("playwav");
@@ -59,6 +60,8 @@ let castChannelName = "";
 let listenChannel;
 let listenChannelName = "";
 let CastingChannelTable = {};
+let buffer_threshold = 0;
+let listeningToUser = "";
 
 //window.MediaRecorder = OpusMediaRecorder;
 
@@ -74,472 +77,539 @@ const visibleMessages = 20;
 let recorder;
 const username = "Anonymous" + new Date().getTime().toString().slice(-4);
 
+document.getElementById("userId").innerHTML = username;
+
 //const channelName = 'orbit-browser-example'
 let channelName = "";
 
 const ipfsOptions = {
-  EXPERIMENTAL: {
-    pubsub: true,
-    sharding: false,
-    dht: false,
-  },
-  preload: { enabled: false },
-  config: {
-    Addresses: {
-      //   Swarm: ['/dns4/ws-star.discovery.libp2p.io/tcp/443/wss/p2p-websocket-star']
-      Swarm: [
-        "/dns4/glacial-bastion-28924.herokuapp.com/tcp/443/wss/p2p-webrtc-star",
-      ],
+    EXPERIMENTAL: {
+        pubsub: true,
+        sharding: false,
+        dht: false,
     },
-  },
+    preload: { enabled: false },
+    config: {
+        Addresses: {
+            //   Swarm: ['/dns4/ws-star.discovery.libp2p.io/tcp/443/wss/p2p-websocket-star']
+            Swarm: [
+                "/dns4/glacial-bastion-28924.herokuapp.com/tcp/443/wss/p2p-webrtc-star",
+            ],
+        },
+    },
 };
 
 const client = new SkynetClient("https://siasky.net");
 const onUploadProgress = (progress, { loaded, total }) => {
-  console.info(`Progress ${Math.round(progress * 100)}%`);
+    console.info(`Progress ${Math.round(progress * 100)}%`);
 };
 
 const orbitOptions = {
-  dbOptions: { maxHistory: visibleMessages },
+    dbOptions: { maxHistory: visibleMessages },
 };
 
 let messages = [];
 
 function startIpfs(username) {
-  userField.value = username;
-  usernameElement.innerHTML = username;
-  myName = username;
+    userField.value = username;
+    usernameElement.innerHTML = username;
+    myName = username;
 
-  // Change the repo path so it includes our username
-  // This makes each chat per username an independent instance
-  ipfsOptions.repo = `/orbit/browser-example/${username}`;
-  const ipfs = new Ipfs(ipfsOptions);
-  ipfs.on("ready", () => initOrbit(ipfs, username));
+    // Change the repo path so it includes our username
+    // This makes each chat per username an independent instance
+    ipfsOptions.repo = `/orbit/browser-example/${username}`;
+    const ipfs = new Ipfs(ipfsOptions);
+    ipfs.on("ready", () => initOrbit(ipfs, username));
 }
 
 function sleepp(ms) {
-  console.log("sleeping ", ms / 1000);
-  return new Promise((resolve) => setTimeout(resolve, ms));
+    console.log("sleeping ", ms / 1000);
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function initOrbit(ipfs, username) {
-  // Change the db directory path so it includes our username
-  // This makes each chat per username an independent instance
-  orbitOptions.dbOptions.directory = `/orbit/browser-example/${username}`;
-  const orbit = new Orbit(ipfs, orbitOptions);
-  orbity = orbit;
-  orbit.events.on("connected", () => orbit.join(channelName));
-  orbit.events.on("joined", onJoinedChannel);
+    // Change the db directory path so it includes our username
+    // This makes each chat per username an independent instance
+    orbitOptions.dbOptions.directory = `/orbit/browser-example/${username}`;
+    const orbit = new Orbit(ipfs, orbitOptions);
+    orbity = orbit;
+    orbit.events.on("connected", () => orbit.join(channelName));
+    orbit.events.on("joined", onJoinedChannel);
 
-  orbit.events.on(
-    "replicate.progress",
-    (address, hash, entry, progress, total) => {
-      console.log("replicating", address, hash, entry, progress, total);
-    }
-  );
+    orbit.events.on(
+        "replicate.progress",
+        (address, hash, entry, progress, total) => {
+            console.log("replicating", address, hash, entry, progress, total);
+        }
+    );
 
-  orbit.events.on("write", (address, entry, heads) => {
-    console.log("writing", address, entry, heads);
-  });
+    orbit.events.on("write", (address, entry, heads) => {
+        console.log("writing", address, entry, heads);
+    });
 
-  orbit.events.on("closed", (dbname) => {
-    console.log("closing");
-  });
+    orbit.events.on("closed", (dbname) => {
+        console.log("closing");
+    });
 
-  orbit.connect(username);
+    orbit.connect(username);
 
-  connectButton = replaceElement(connectButton);
-  connectButton.addEventListener("click", async () => {
-    // Reconnect
-    await orbit.disconnect();
-    await ipfs.stop();
-    startIpfs(userField.value);
-  });
+    connectButton = replaceElement(connectButton);
+    connectButton.addEventListener("click", async() => {
+        // Reconnect
+        await orbit.disconnect();
+        await ipfs.stop();
+        startIpfs(userField.value);
+    });
 
-  orbit.events.on("entry", (entry, channelName) => {
-    const post = entry.payload.value;
-    //    console.log(`[${post.meta.ts}] < ${post.meta.from.name}> ${post.content}`)
-  });
+    orbit.events.on("entry", (entry, channelName) => {
+        const post = entry.payload.value;
+        //    console.log(`[${post.meta.ts}] < ${post.meta.from.name}> ${post.content}`)
+    });
 }
 
 function getWavData(tt) {
-  redeemingData = true;
+    redeemingData = true;
 
-  return fetch(tt.next)
-    .then((response) => response.text())
-    .then((text) => {
-      let json = JSON.parse(text);
-      fetch(json.link)
-        .then((response) => {
-          //console.log(response);
-          return response.arrayBuffer();
-        })
-        .then((arrayBuffer) => {
-          feeder._backend._context.decodeAudioData(arrayBuffer, function (
-            decodedData
-          ) {
-            a_buffer = [decodedData.getChannelData(0)];
-            feeder.bufferData(a_buffer);
-            if (json.next !== "none") {
-              getWavData(json);
-            } else {
-              redeemingData = false;
-            }
-          });
+    return fetch(tt.next)
+        .then((response) => response.text())
+        .then((text) => {
+            let json = JSON.parse(text);
+            fetch(json.link)
+                .then((response) => {
+                    //console.log(response);
+                    return response.arrayBuffer();
+                })
+                .then((arrayBuffer) => {
+                    feeder._backend._context.decodeAudioData(arrayBuffer, function(
+                        decodedData
+                    ) {
+                        a_buffer = [decodedData.getChannelData(0)];
+                        feeder.bufferData(a_buffer);
+                        if (json.next !== "none") {
+                            getWavData(json);
+                        } else {
+                            redeemingData = false;
+                        }
+                    });
 
-          console.log(arrayBuffer);
+                    console.log(arrayBuffer);
+                });
         });
-    });
 }
 
 function getWavFile(tt) {
-  // return fetch(tt.next).then(response => response.text())
-  //       .then(text => {
-  //             let json = JSON.parse(text);
+    // return fetch(tt.next).then(response => response.text())
+    //       .then(text => {
+    //             let json = JSON.parse(text);
 
-  //       })
-  let a_buffer;
-  return fetch(tt.link)
-    .then((response) => {
-      //console.log(response);
-      return response.arrayBuffer();
-    })
-    .then((arrayBuffer) => {
-      feeder._backend._context.decodeAudioData(arrayBuffer, function (
-        decodedData
-      ) {
-        a_buffer = [decodedData.getChannelData(0)];
-        feeder.bufferData(a_buffer);
-      });
+    //       })
+    let a_buffer;
+    return fetch(tt.link)
+        .then((response) => {
+            //console.log(response);
+            return response.arrayBuffer();
+        })
+        .then((arrayBuffer) => {
+            feeder._backend._context.decodeAudioData(arrayBuffer, function(
+                decodedData
+            ) {
+                a_buffer = [decodedData.getChannelData(0)];
+                feeder.bufferData(a_buffer);
+            });
 
-      console.log(arrayBuffer);
-    });
+            console.log(arrayBuffer);
+        });
 }
 
 function onJoinedChannel(channelName, channel) {
-  messages = [];
+    messages = [];
 
-  if (channelName.substring(0, 11) === "skayak-user") {
-    castChannelObject = channel;
-    console.log("user channel joined", channelName);
-  } else {
-    latestChannelObject = channel;
-  }
-
-  // Replace HTML elements so their eventListeners are cleared
-  messageField = replaceElement(messageField);
-  sendButton = replaceElement(sendButton);
-  sendGreetingButton = replaceElement(sendGreetingButton);
-  playWavElm = replaceElement(playWavElm);
-  recordButton = replaceElement(recordButton);
-
-  channelNameElement.innerHTML = "#" + channelName;
-
-  channel.on("ready", async () => {
-    //channel.sendMessage(`/me has joined ${channelName}`)
-    //console.log("joined channel!!")
-    channel.peers.then(renderPeers);
-  });
-
-  channel.on("entry", (entry) => {
-    messages = [...messages, entry.payload.value].sort(
-      (a, b) => a.meta.ts - b.meta.ts
-    );
-    renderMessages(messages);
-    channel.peers.then(renderPeers);
-    // console.log("Entry:", entry.payload.value.content);
-    // console.log("Entry:", entry.payload.value);
-
-    console.log("channel entry", channel_message_counter++);
-
-    
-
-    try {
-      let tt = JSON.parse(entry.payload.value.content);
-
-      if (
-        tt.link === "none" &&
-        tt.newChannelName !== "" &&
-        entry.payload.value.meta.from.name !== myName
-      ) {
-        CastingChannelTable[tt.newChannelName] = tt.ChannelStatus;
-
-        let x = document
-          .getElementById("channelList")
-          .querySelectorAll("#" + tt.newChannelTitle);
-        if (tt.ChannelStatus && x.length == 0) {
-          var element = document.createElement("button");
-          element.setAttribute("id", tt.newChannelTitle);
-          element.appendChild(document.createTextNode(tt.newChannelTitle));
-          element.addEventListener("click", async function () {
-            playWav();
-            let latestTimestring = await fetch(
-              "https://time.akamai.com"
-            ).then((response) => response.text());
-            let latestTimestamp = parseInt(latestTimestring / 50);
-            //latestChannel = "skayak-general-" + latestTimestamp.toString();
-            listenChannelName =
-              "skayak-user-" +
-              tt.newChannelTitle +
-              "-" +
-              latestTimestamp.toString();
-          });
-          let channelList = document.getElementById("channelList");
-          channelList.appendChild(element);
-        } else if (!tt.ChannelStatus) {
-          // let x = document.getElementById("channelList").querySelectorAll("#" + tt.newChannelTitle);
-          // for (i = 0; i < x.length; i++) {
-          //   x[i].remove()
-          // }
-          document.getElementById(tt.newChannelTitle).remove();
-          if (listenChannelName != "") {
-            playWavStopElm.click();
-            orbity.leave(listenChannelName);
-            fetch("https://time.akamai.com")
-              .then((response) => response.text())
-              .then((latestTimestring) => {
-                let latestTimestamp = parseInt(latestTimestring / 50);
-                latestChannel = "skayak-general-" + latestTimestamp.toString();
-                orbity.join(latestChannel);
-                listenChannelName = "";
-              });
-
-            //latestChannel = "skayak-general-" + latestTimestamp.toString();
-          }
-        }
-      }
-
-      //if(entry.payload.value.meta.from.name !== myName  && latest > entry.payload.value.meta.ts)
-      if (
-        entry.payload.value.meta.from.name !== myName &&
-        tt.ts > latest &&
-        tt.link !== "none"
-      ) {
-        latest = tt.ts;
-        console.log("TT link ", entry.payload.value.meta.from.name, tt.ts);
-        getWavFile(tt);
-      }
-    } catch (e) {
-      console.log(e);
+    if (channelName.substring(0, 11) === "skayak-user") {
+        castChannelObject = channel;
+        console.log("user channel joined", channelName);
+    } else {
+        latestChannelObject = channel;
     }
-  });
 
-  //sendGreetingButton.addEventListener('click', () => sendGreeting(channel))
-  sendButton.addEventListener("click", () => sendMessage());
-  //playDataElm.addEventListener('click', () => sendData(channel))
-  //stopDataElm.addEventListener('click', () => stopData(channel))
+    // Replace HTML elements so their eventListeners are cleared
+    messageField = replaceElement(messageField);
+    sendButton = replaceElement(sendButton);
+    sendGreetingButton = replaceElement(sendGreetingButton);
+    playWavElm = replaceElement(playWavElm);
+    recordButton = replaceElement(recordButton);
 
-  joinChannelElm.addEventListener("click", () => {
-    // /channel.join();
-    orbity.join(latestChannel);
-  });
+    channelNameElement.innerHTML = "#" + channelName;
 
-  messageField.addEventListener("keyup", (event) => {
-    if (event.keyCode === 13) sendMessage();
-  });
+    channel.on("ready", async() => {
+        //channel.sendMessage(`/me has joined ${channelName}`)
+        //console.log("joined channel!!")
+        channel.peers.then(renderPeers);
+    });
 
-  playWavElm.addEventListener("click", async () => playWav());
-  recordButton.addEventListener("click", () => startStream());
+    channel.on("entry", (entry) => {
+        messages = [...messages, entry.payload.value].sort(
+            (a, b) => a.meta.ts - b.meta.ts
+        );
+        renderMessages(messages);
+        channel.peers.then(renderPeers);
+        // console.log("Entry:", entry.payload.value.content);
+        // console.log("Entry:", entry.payload.value);
 
-  channel.load(10);
-  first_run = 0;
+        console.log("channel entry", channel_message_counter++);
+        let castlookupmess;
+
+        try {
+            let tt = JSON.parse(entry.payload.value.content);
+
+            if (
+                tt.link === "none" &&
+                tt.newChannelName !== "" &&
+                entry.payload.value.meta.from.name !== myName
+            ) {
+                CastingChannelTable[tt.newChannelName] = tt.ChannelStatus;
+                castlookupmess = document.getElementById("castlookup").remove();
+                //alert("incoming")
+                let x = document
+                    .getElementById("channelList")
+                    .querySelectorAll("#" + tt.newChannelTitle);
+                if (tt.ChannelStatus && x.length == 0) {
+                    //alert("gotnew stream")
+                    // var element = document.createElement("button");
+                    // element.setAttribute("id", tt.newChannelTitle);
+                    // element.appendChild(document.createTextNode(tt.newChannelTitle));
+
+                    let newCastContainer = document.createElement("div");
+                    newCastContainer.setAttribute("id", tt.newChannelTitle);
+                    let usernameContainer = document.createElement("span");
+                    usernameContainer.appendChild(
+                        document.createTextNode(tt.newChannelTitle + " ")
+                    );
+                    let playControls = document.createElement("span");
+                    playControls.setAttribute(
+                        "class",
+                        "glyphicon-basic glyphicon glyphicon-play"
+                    );
+                    playControls.setAttribute("data-attribute", "play");
+                    newCastContainer.appendChild(usernameContainer);
+                    newCastContainer.appendChild(playControls);
+                    // playControls.addEventListener('click', function() {
+
+                    // })
+
+                    playControls.addEventListener("click", async function() {
+                        if (playControls.getAttribute("data-attribute") == "stop") {
+                            playControls.setAttribute(
+                                "class",
+                                "glyphicon-basic glyphicon glyphicon-play"
+                            );
+                            playControls.setAttribute("data-attribute", "play");
+                            listenChannelName = "";
+                            playWavStopElm.click();
+                            orbity.join(latestChannel);
+                            console.log("joining general channel");
+                        } else if (
+                            listenChannelName == "" &&
+                            playControls.getAttribute("data-attribute") == "play"
+                        ) {
+                            playWav();
+                            let latestTimestring = await fetch(
+                                "https://time.akamai.com"
+                            ).then((response) => response.text());
+                            let latestTimestamp = parseInt(latestTimestring / 50);
+                            //latestChannel = "skayak-general-" + latestTimestamp.toString();
+                            listenChannelName =
+                                "skayak-user-" +
+                                tt.newChannelTitle +
+                                "-" +
+                                latestTimestamp.toString();
+                            listeningToUser = tt.newChannelTitle;
+                            playControls.setAttribute(
+                                "class",
+                                "glyphicon-basic glyphicon glyphicon-stop"
+                            );
+                            playControls.setAttribute("data-attribute", "stop");
+                            orbity.join(listenChannelName);
+                        }
+                    });
+
+                    let channelList = document.getElementById("channelList");
+                    channelList.appendChild(newCastContainer);
+                }
+                if (!tt.ChannelStatus) {
+                    // let x = document.getElementById("channelList").querySelectorAll("#" + tt.newChannelTitle);
+                    // for (i = 0; i < x.length; i++) {
+                    //   x[i].remove()
+                    // }
+                    document.getElementById(tt.newChannelTitle).remove();
+
+                    if (document.getElementById("channelList").childNodes.length == 0) {
+                        document.getElementById("skayak-cont").appendChild(castlookupmess);
+                    }
+
+                    if (listenChannelName != "") {
+                        playWavStopElm.click();
+                        orbity.leave(listenChannelName);
+                        fetch("https://time.akamai.com")
+                            .then((response) => response.text())
+                            .then((latestTimestring) => {
+                                let latestTimestamp = parseInt(latestTimestring / 50);
+                                latestChannel = "skayak-general-" + latestTimestamp.toString();
+                                orbity.join(latestChannel);
+                                listenChannelName = "";
+                            });
+
+                        //latestChannel = "skayak-general-" + latestTimestamp.toString();
+                    }
+                }
+            }
+
+            //if(entry.payload.value.meta.from.name !== myName  && latest > entry.payload.value.meta.ts)
+            if (
+                entry.payload.value.meta.from.name !== myName &&
+                tt.ts > latest &&
+                tt.link !== "none"
+            ) {
+                latest = tt.ts;
+                console.log("TT link ", entry.payload.value.meta.from.name, tt.ts);
+                getWavFile(tt);
+                buffer_threshold = 0;
+            }
+        } catch (e) {
+            console.log(e);
+        }
+    });
+
+    //sendGreetingButton.addEventListener('click', () => sendGreeting(channel))
+    sendButton.addEventListener("click", () => sendMessage());
+    //playDataElm.addEventListener('click', () => sendData(channel))
+    //stopDataElm.addEventListener('click', () => stopData(channel))
+
+    joinChannelElm.addEventListener("click", () => {
+        // /channel.join();
+        orbity.join(latestChannel);
+    });
+
+    messageField.addEventListener("keyup", (event) => {
+        if (event.keyCode === 13) sendMessage();
+    });
+
+    playWavElm.addEventListener("click", async() => playWav());
+
+    recordButton.addEventListener("click", () => {
+        if (recordButton.getAttribute("data-attribute") == "cast") {
+            recordButton.setAttribute("data-attribute", "stop");
+            document
+                .getElementById("casticon")
+                .setAttribute("class", "fa fa-stop-circle");
+            startStream();
+        } else {
+            recordButton.setAttribute("data-attribute", "cast");
+            document
+                .getElementById("casticon")
+                .setAttribute("class", "fa fa-microphone");
+            stopButton.click();
+        }
+    });
+
+    channel.load(10);
+    first_run = 0;
 }
 
 function sendMessage() {
-  latestChannelObject.sendMessage(messageField.value);
-  messageField.value = null;
+    latestChannelObject.sendMessage(messageField.value);
+    messageField.value = null;
 }
 
 function sendGreeting(channel) {
-  const creatures = ["👻", "🐙", "🐷", "🐬", "🐞", "🐈", "🙉", "🐸", "🐓"];
-  //channel.sendMessage('Greetings! ' + creatures[Math.floor(Math.random() * creatures.length)])
-  //console.log("joined channel!!");
+    const creatures = ["👻", "🐙", "🐷", "🐬", "🐞", "🐈", "🙉", "🐸", "🐓"];
+    //channel.sendMessage('Greetings! ' + creatures[Math.floor(Math.random() * creatures.length)])
+    //console.log("joined channel!!");
 }
 
 function blobToFile(theBlob, fileName) {
-  //A Blob() is almost a File() - it's just missing the two properties below which we will add
-  theBlob.lastModifiedDate = new Date();
-  theBlob.name = fileName;
-  return theBlob;
+    //A Blob() is almost a File() - it's just missing the two properties below which we will add
+    theBlob.lastModifiedDate = new Date();
+    theBlob.name = fileName;
+    return theBlob;
 }
 
 async function uploadExample(file) {
-  try {
-    const { skylink } = await client.upload(file, { onUploadProgress });
-    return skylink;
-  } catch (error) {
-    console.log(error);
-  }
+    try {
+        const { skylink } = await client.upload(file, { onUploadProgress });
+        return skylink;
+    } catch (error) {
+        console.log(error);
+    }
 }
 
 function sendData(channel) {
-  interv = setInterval(async function () {
-    let r = Math.random().toString(36).substring(7);
-    //console.log("random", r);
+    interv = setInterval(async function() {
+        let r = Math.random().toString(36).substring(7);
+        //console.log("random", r);
 
-    //   let myBlobParts = ['<html><h2>'+ r +'</h2></html>'];
-    let myBlobParts = [r];
+        //   let myBlobParts = ['<html><h2>'+ r +'</h2></html>'];
+        let myBlobParts = [r];
 
-    let myBlob = new Blob(myBlobParts, { type: "text/html" });
+        let myBlob = new Blob(myBlobParts, { type: "text/html" });
 
-    let myFile = blobToFile(myBlob, "my-text.html");
-    // uploadExample(myFile).then((res) => {
-    //     console.log("file uploaded",res);
-    // }).catch((e) => {
-    //     console.log("file upload error",e);
-    // })
+        let myFile = blobToFile(myBlob, "my-text.html");
+        // uploadExample(myFile).then((res) => {
+        //     console.log("file uploaded",res);
+        // }).catch((e) => {
+        //     console.log("file upload error",e);
+        // })
 
-    let skylink;
-    try {
-      skylink = await uploadExample(myFile);
-      let full_link = "https://siasky.net/" + skylink;
-      // console.log(full_link);
-      let yy = {
-        link: full_link,
-      };
-      //channel.sendMessage(JSON.stringify(yy));
-      console.log("joined channel!!");
-    } catch (e) {
-      console.log("error skylkiknking");
-    }
-  }, 10000);
+        let skylink;
+        try {
+            skylink = await uploadExample(myFile);
+            let full_link = "https://siasky.net/" + skylink;
+            // console.log(full_link);
+            let yy = {
+                link: full_link,
+            };
+            //channel.sendMessage(JSON.stringify(yy));
+            console.log("joined channel!!");
+        } catch (e) {
+            console.log("error skylkiknking");
+        }
+    }, 10000);
 }
 
 function stopData(channel) {
-  console.log("stopping data");
-  clearInterval(interv);
+    console.log("stopping data");
+    clearInterval(interv);
 }
 
 function renderMessages(messages) {
-  messagesElement.innerHTML = messages
-    .slice(-visibleMessages)
-    .map(
-      (msg) =>
-        `${formatTimestamp(msg.meta.ts)} &lt;${msg.meta.from.name}&gt; ${
+    messagesElement.innerHTML = messages
+        .slice(-visibleMessages)
+        .map(
+            (msg) =>
+            `${formatTimestamp(msg.meta.ts)} &lt;${msg.meta.from.name}&gt; ${
           msg.content
         }<br/>`
-    )
-    .join("\n");
+        )
+        .join("\n");
 
-  //messagesElement.innerHTML = messy
-  //console.log(messy);
+    //messagesElement.innerHTML = messy
+    //console.log(messy);
 }
 
 function renderPeers(peers) {
-  peersElm.innerHTML = "Peers: " + (peers ? peers.length : 0);
+    peersElm.innerHTML = "Peers: " + (peers ? peers.length : 0);
 }
 
 function replaceElement(oldElement) {
-  const newElement = oldElement.cloneNode(true);
-  oldElement.parentNode.replaceChild(newElement, oldElement);
-  return newElement;
+    const newElement = oldElement.cloneNode(true);
+    oldElement.parentNode.replaceChild(newElement, oldElement);
+    return newElement;
 }
 
 function formatTimestamp(timestamp) {
-  const safeTime = (time) => ("0" + time).slice(-2);
-  const date = new Date(timestamp);
-  return (
-    safeTime(date.getHours()) +
-    ":" +
-    safeTime(date.getMinutes()) +
-    ":" +
-    safeTime(date.getSeconds())
-  );
+    const safeTime = (time) => ("0" + time).slice(-2);
+    const date = new Date(timestamp);
+    return (
+        safeTime(date.getHours()) +
+        ":" +
+        safeTime(date.getMinutes()) +
+        ":" +
+        safeTime(date.getSeconds())
+    );
 }
 
 //navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {streamer = stream});
 
 function startRecording(channel) {
-  //console.log("recordgin");
+    //console.log("recordgin");
 
-  //    if(isStopRecording) return;
-  navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-    isStopRecording = false;
+    //    if(isStopRecording) return;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+        isStopRecording = false;
 
-    let options = { mimeType: "audio/ogg" };
-    // Start recording
-    recorder = new MediaRecorder(stream);
-    recorder.start();
-    console.log("record start");
-    // Set record to <audio> when recording will be finished
-    recorder.addEventListener("dataavailable", async (e) => {
-      audioElement.src = URL.createObjectURL(e.data);
-      // let myBlob = new Blob([e.data], {type : 'audio/wav'});
-      let myFile = blobToFile(e.data, "1.wav");
+        let options = { mimeType: "audio/ogg" };
+        // Start recording
+        recorder = new MediaRecorder(stream);
+        recorder.start();
+        console.log("record start");
+        // Set record to <audio> when recording will be finished
+        recorder.addEventListener("dataavailable", async(e) => {
+            audioElement.src = URL.createObjectURL(e.data);
+            // let myBlob = new Blob([e.data], {type : 'audio/wav'});
+            let myFile = blobToFile(e.data, "1.wav");
 
-      let skylink;
-      try {
-        skylink = await uploadExample(myFile);
-        let full_link = "https://siasky.net/" + skylink;
-        let yy = {};
-        console.log(full_link);
+            let skylink;
+            try {
+                skylink = await uploadExample(myFile);
+                let full_link = "https://siasky.net/" + skylink;
+                let yy = {};
+                console.log(full_link);
 
-        sync_timestamp = await fetch(
-          "https://time.akamai.com"
-        ).then((response) => response.text());
+                sync_timestamp = await fetch(
+                    "https://time.akamai.com"
+                ).then((response) => response.text());
 
-        // let pointerJson = {
-        //   "next":
-        // };
+                // let pointerJson = {
+                //   "next":
+                // };
 
-        yy = {
-          link: full_link,
-          ts: parseInt(sync_timestamp),
-        };
+                yy = {
+                    link: full_link,
+                    ts: parseInt(sync_timestamp),
+                };
 
-        castChannelObject.sendMessage(JSON.stringify(yy));
-        //console.log("joined channel!!");
-      } catch (e) {
-        console.log("error skylkiknking");
-      }
+                castChannelObject.sendMessage(JSON.stringify(yy));
+                //console.log("joined channel!!");
+            } catch (e) {
+                console.log("error skylkiknking");
+            }
 
-      //  console.log("got start",e.data);
+            //  console.log("got start",e.data);
+        });
     });
-  });
 
-  //   recorder.ondataavailable = function(e) {
-  //     //log('mediaRecorder.ondataavailable, e.data.size='+e.data.size);
-  //     //chunks.push(e.data);
-  //     audioElement.src = URL.createObjectURL(e.data);
-  //     console.log("got start");
-  //   };
+    //   recorder.ondataavailable = function(e) {
+    //     //log('mediaRecorder.ondataavailable, e.data.size='+e.data.size);
+    //     //chunks.push(e.data);
+    //     audioElement.src = URL.createObjectURL(e.data);
+    //     console.log("got start");
+    //   };
 }
 
 // Stop recording
-stopButton.addEventListener("click", async () => {
-  recorder.stop();
-  console.log("record stop");
-  isStopRecording = true;
-  
+stopButton.addEventListener("click", async() => {
+    recorder.stop();
+    console.log("record stop");
+    isStopRecording = true;
+
     castChannelObject.sendMessage(
-      JSON.stringify({
-        link: "none",
-        newChannelName: castChannelName,
-        newChannelTitle: username,
-        ChannelStatus: false,
-      })
+        JSON.stringify({
+            link: "none",
+            newChannelName: castChannelName,
+            newChannelTitle: username,
+            ChannelStatus: false,
+        })
     );
 
-  let latestTimestring = await fetch(
-    "https://time.akamai.com"
-  ).then((response) => response.text());
-  let latestTimestamp = parseInt(latestTimestring / 100);
-  latestChannel = "skayak-general-" + latestTimestamp.toString();
-  orbity.leave(castChannelName);
-  orbity.join(latestChannel);
-  console.log("joining back", latestChannel);
-  latestChannelObject.sendMessage(
-    JSON.stringify({
-      link: "none",
-      newChannelName: castChannelName,
-      newChannelTitle: username,
-      ChannelStatus: false,
-    })
-  );
+    let latestTimestring = await fetch(
+        "https://time.akamai.com"
+    ).then((response) => response.text());
+    let latestTimestamp = parseInt(latestTimestring / 100);
+    latestChannel = "skayak-general-" + latestTimestamp.toString();
+    orbity.leave(castChannelName);
+    orbity.join(latestChannel);
+    console.log("joining back", latestChannel);
+    latestChannelObject.sendMessage(
+        JSON.stringify({
+            link: "none",
+            newChannelName: castChannelName,
+            newChannelTitle: username,
+            ChannelStatus: false,
+        })
+    );
 
-  castChannelName = "";
-  // Remove “recording” icon from browser tab
-  recorder.stream.getTracks().forEach((i) => i.stop());
+    castChannelName = "";
+    // Remove “recording” icon from browser tab
+    recorder.stream.getTracks().forEach((i) => i.stop());
 });
 
 // Recording should be started in user-initiated event like buttons
@@ -547,70 +617,70 @@ stopButton.addEventListener("click", async () => {
 //let channelName = latestChannel
 
 async function startup() {
-  let latestTimestring = await fetch(
-    "https://time.akamai.com"
-  ).then((response) => response.text());
-  let latestTimestamp = parseInt(parseInt(latestTimestring) / 100);
-  latestChannel = "skayak-general-" + latestTimestamp.toString();
-  console.log(latestChannel);
+    let latestTimestring = await fetch(
+        "https://time.akamai.com"
+    ).then((response) => response.text());
+    let latestTimestamp = parseInt(parseInt(latestTimestring) / 100);
+    latestChannel = "skayak-general-" + latestTimestamp.toString();
+    console.log(latestChannel);
 
-  channelName = latestChannel;
-  startIpfs(username);
-  latestTimestring = await fetch("https://time.akamai.com").then((response) =>
-    response.text()
-  );
-  latestTimestamp = parseInt(parseInt(latestTimestring) / 100);
-  let sleepTime = (100 - (parseInt(latestTimestring) % 100)) * 1000;
-
-  while (1) {
-    await sleepp(sleepTime);
-
-    if (listenChannelName != "") {
-      orbity.leave(listenChannelName);
-    } else if (castChannelName != "") {
-      orbity.leave(castChannelName);
-    } else {
-      orbity.leave(latestChannel);
-    }
-
-    console.log("leaving", latestChannel);
+    channelName = latestChannel;
+    startIpfs(username);
     latestTimestring = await fetch("https://time.akamai.com").then((response) =>
-      response.text()
+        response.text()
     );
-    latestTimestamp = parseInt(latestTimestring / 100);
+    latestTimestamp = parseInt(parseInt(latestTimestring) / 100);
+    let sleepTime = (100 - (parseInt(latestTimestring) % 100)) * 1000;
 
-    if (listenChannelName != "") {
-      let latestListenTimestamp = parseInt(latestTimestring / 50);
-      listenChannelName =
-        "skayak-user-" +
-        listenChannelName.substring(12, 25) +
-        "-" +
-        latestListenTimestamp.toString();
-      latestChannel = "skayak-general-" + latestTimestamp.toString();
-      console.log("joining", listenChannelName);
-      sleepTime = (50 - (parseInt(latestListenTimestamp) % 50)) * 1000;
-      orbity.join(listenChannelName);
+    while (1) {
+        await sleepp(sleepTime);
 
-      //sleepTime = 50000;
-    } else if (castChannelName != "") {
-      let latestCastTimestamp = parseInt(latestTimestring / 50);
-      castChannelName =
-        "skayak-user-" +
-        castChannelName.substring(12, 25) +
-        "-" +
-        latestCastTimestamp.toString();
-      latestChannel = "skayak-general-" + latestTimestamp.toString();
-      console.log("joining", castChannelName);
-      sleepTime = (50 - (parseInt(latestCastTimestamp) % 50)) * 1000;
-      orbity.join(castChannelName);
-      //sleepTime = 50000;
-    } else {
-      latestChannel = "skayak-general-" + latestTimestamp.toString();
-      console.log("joining", latestChannel);
-      orbity.join(latestChannel);
-      sleepTime = 100000;
+        if (listenChannelName != "") {
+            orbity.leave(listenChannelName);
+        } else if (castChannelName != "") {
+            orbity.leave(castChannelName);
+        } else {
+            orbity.leave(latestChannel);
+        }
+
+        console.log("leaving", latestChannel);
+        latestTimestring = await fetch("https://time.akamai.com").then((response) =>
+            response.text()
+        );
+        latestTimestamp = parseInt(latestTimestring / 100);
+
+        if (listenChannelName != "") {
+            let latestListenTimestamp = parseInt(latestTimestring / 50);
+            listenChannelName =
+                "skayak-user-" +
+                listenChannelName.substring(12, 25) +
+                "-" +
+                latestListenTimestamp.toString();
+            latestChannel = "skayak-general-" + latestTimestamp.toString();
+            console.log("joining", listenChannelName);
+            sleepTime = (50 - (parseInt(latestListenTimestamp) % 50)) * 1000;
+            orbity.join(listenChannelName);
+
+            //sleepTime = 50000;
+        } else if (castChannelName != "") {
+            let latestCastTimestamp = parseInt(latestTimestring / 50);
+            castChannelName =
+                "skayak-user-" +
+                castChannelName.substring(12, 25) +
+                "-" +
+                latestCastTimestamp.toString();
+            latestChannel = "skayak-general-" + latestTimestamp.toString();
+            console.log("joining", castChannelName);
+            sleepTime = (50 - (parseInt(latestCastTimestamp) % 50)) * 1000;
+            orbity.join(castChannelName);
+            //sleepTime = 50000;
+        } else {
+            latestChannel = "skayak-general-" + latestTimestamp.toString();
+            console.log("joining", latestChannel);
+            orbity.join(latestChannel);
+            sleepTime = 100000;
+        }
     }
-  }
 }
 
 // async function notifyChannel() {
@@ -647,140 +717,155 @@ startup();
 // // Set up 2-channel stereo, 48 kHz sampling rate
 
 function bufferSineWave(time) {
-  var freq = 261, // middle C
-    shellFreq = 0.5, // fade in/out over 2 seconds
-    rate = 48000,
-    chunkSamples = Math.round(time * rate), // buffer 1s at a time
-    samples = Math.ceil(chunkSamples / freq) * freq,
-    buffer = new Float32Array(samples),
-    packet = [buffer];
+    var freq = 261, // middle C
+        shellFreq = 0.5, // fade in/out over 2 seconds
+        rate = 48000,
+        chunkSamples = Math.round(time * rate), // buffer 1s at a time
+        samples = Math.ceil(chunkSamples / freq) * freq,
+        buffer = new Float32Array(samples),
+        packet = [buffer];
 
-  // for (var i = 0; i < samples; i++) {
-  //   // buffer[i] = Math.sin((sampleCounter / rate) * freq * 2 * Math.PI)
-  //   //   * Math.sin((sampleCounter / rate) * shellFreq * 2 * Math.PI);
-  //   buffer[i] = 0;
-  //   //sampleCounter++;
-  // }
+    // for (var i = 0; i < samples; i++) {
+    //   // buffer[i] = Math.sin((sampleCounter / rate) * freq * 2 * Math.PI)
+    //   //   * Math.sin((sampleCounter / rate) * shellFreq * 2 * Math.PI);
+    //   buffer[i] = 0;
+    //   //sampleCounter++;
+    // }
 
-  feeder.bufferData(packet);
+    feeder.bufferData(packet);
 }
 
 let daty;
+
 function playWav() {
-  console.log("playwav start");
-  // Remove “recording” icon from browser tab
+    console.log("playwav start");
+    // Remove “recording” icon from browser tab
 
-  // feeder.bufferData([
-  //   new Float32Array(12000)
-  // ]);
+    // feeder.bufferData([
+    //   new Float32Array(12000)
+    // ]);
 
-  feeder.init(1, 44100);
-  // bufferSineWave(1)
-  // fetch('./1.wav').then(response => {
-  //   console.log(response);
-  //   return response.arrayBuffer();
-  // }).then(arrayBuffer => {
+    feeder.init(1, 44100);
+    // bufferSineWave(1)
+    // fetch('./1.wav').then(response => {
+    //   console.log(response);
+    //   return response.arrayBuffer();
+    // }).then(arrayBuffer => {
 
-  //   feeder._backend._context.decodeAudioData(arrayBuffer, function(decodedData) {
-  //     //source.buffer = decodedData;
-  //     //source.connect(audioCtx.destination);
-  //     console.log(decodedData.getChannelData(0));
+    //   feeder._backend._context.decodeAudioData(arrayBuffer, function(decodedData) {
+    //     //source.buffer = decodedData;
+    //     //source.connect(audioCtx.destination);
+    //     console.log(decodedData.getChannelData(0));
 
-  //     daty = [decodedData.getChannelData(0)];
-  //     feeder.bufferData(daty);
-  //   });
-  //   console.log(arrayBuffer);
-  // })
+    //     daty = [decodedData.getChannelData(0)];
+    //     feeder.bufferData(daty);
+    //   });
+    //   console.log(arrayBuffer);
+    // })
 
-  bufferSineWave(1);
-  // Start playback...
-  feeder.start();
+    bufferSineWave(1);
+    // Start playback...
+    feeder.start();
 
-  // setTimeout(function() {
-  //   console.log(" stime ");
-  // }, 4000);
+    // setTimeout(function() {
+    //   console.log(" stime ");
+    // }, 4000);
 
-  // while(!isStopRecording){
-  //   await sleepp(4000);
-  //   console.log(" stime ");
-  // }
+    // while(!isStopRecording){
+    //   await sleepp(4000);
+    //   console.log(" stime ");
+    // }
 
-  //recordButton.click();
-  //startRecording(channel);
+    //recordButton.click();
+    //startRecording(channel);
 }
 
 async function startStream() {
-  isStopRecording = false;
+    isStopRecording = false;
 
-  let latestTimestring = await fetch(
-    "https://time.akamai.com"
-  ).then((response) => response.text());
-  let latestTimestamp = parseInt(latestTimestring / 100);
-  //latestChannel = "skayak-general-" + latestTimestamp.toString();
+    let latestTimestring = await fetch(
+        "https://time.akamai.com"
+    ).then((response) => response.text());
+    let latestTimestamp = parseInt(latestTimestring / 100);
+    //latestChannel = "skayak-general-" + latestTimestamp.toString();
 
-  castChannelName =
-    "skayak-user-" + username + "-" + latestTimestamp.toString();
-  orbity.join(castChannelName);
+    castChannelName =
+        "skayak-user-" + username + "-" + latestTimestamp.toString();
+    orbity.join(castChannelName);
 
-  latestChannelObject.sendMessage(
-    JSON.stringify({
-      link: "none",
-      newChannelName: castChannelName,
-      newChannelTitle: username,
-      ChannelStatus: true,
-    })
-  );
+    latestChannelObject.sendMessage(
+        JSON.stringify({
+            link: "none",
+            newChannelName: castChannelName,
+            newChannelTitle: username,
+            ChannelStatus: true,
+        })
+    );
 
-  while (!isStopRecording) {
-    if (recorder) {
-      recorder.stop();
-      recorder.stream.getTracks().forEach((i) => i.stop());
+    while (!isStopRecording) {
+        if (recorder) {
+            recorder.stop();
+            recorder.stream.getTracks().forEach((i) => i.stop());
+        }
+        console.log("start record time ");
+        startRecording(castChannelObject);
+        await sleepp(10000);
     }
-    console.log("start record time ");
-    startRecording(castChannelObject);
-    await sleepp(10000);
-  }
 }
 
 let sampleCounter = 0;
 
-feeder.onstarved = function () {
-  console.log("starving");
-  bufferSineWave(1);
+feeder.onstarved = function() {
+    console.log("starving");
+    bufferSineWave(1);
 };
 
-feeder.onbufferlow = function () {
-  console.log("buffer low");
-  // while (feeder.durationBuffered < feeder.bufferThreshold) {
-  //   feeder.bufferData([
-  //     new Float32Array(12000)
-  //   ]);
-  // }
-  bufferSineWave(2);
+feeder.onbufferlow = function() {
+    console.log("buffer low");
+    // while (feeder.durationBuffered < feeder.bufferThreshold) {
+    //   feeder.bufferData([
+    //     new Float32Array(12000)
+    //   ]);
+    // }
+    bufferSineWave(2);
 
-  // fetch('./1.wav').then(response => {
-  //   console.log(response);
-  //   return response.arrayBuffer();
-  // }).then(arrayBuffer => {
+    if (++buffer_threshold > 10) {
+        if (document.getElementById(listeningToUser)) {
+            document.getElementById(listeningToUser).remove();
+        }
+        listenChannelName = "";
+        playWavStopElm.click();
+        orbity.join(latestChannel);
+        console.log("joining general channel");
+        // let nodes = document.getElementById("channelList").childNodes.length;
+        // for (let i = 0; i < document.getElementById("channelList").childNodes.length; i++) {
+        //     nodes[i].remove();
+        // }
+    }
 
-  //   feeder._backend._context.decodeAudioData(arrayBuffer, function(decodedData) {
-  //     //source.buffer = decodedData;
-  //     //source.connect(audioCtx.destination);
-  //     console.log(decodedData.getChannelData(0));
+    // fetch('./1.wav').then(response => {
+    //   console.log(response);
+    //   return response.arrayBuffer();
+    // }).then(arrayBuffer => {
 
-  //     a_buffer = [decodedData.getChannelData(0)];
-  //     feeder.bufferData(a_buffer);
-  //   });
-  //   console.log(arrayBuffer);
-  // })
+    //   feeder._backend._context.decodeAudioData(arrayBuffer, function(decodedData) {
+    //     //source.buffer = decodedData;
+    //     //source.connect(audioCtx.destination);
+    //     console.log(decodedData.getChannelData(0));
+
+    //     a_buffer = [decodedData.getChannelData(0)];
+    //     feeder.bufferData(a_buffer);
+    //   });
+    //   console.log(arrayBuffer);
+    // })
 };
 
 playWavStopElm.addEventListener("click", () => {
-  // You can pause output at any time:
-  console.log(feeder._backend);
-  feeder.stop();
-  console.log("stopping feeder");
-  // to release resources, call feeder.close() instead.
+    // You can pause output at any time:
+    console.log(feeder._backend);
+    feeder.stop();
+    console.log("stopping feeder");
+    // to release resources, call feeder.close() instead.
 });
 
 // feeder.waitUntilReady(function() {
